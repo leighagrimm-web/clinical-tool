@@ -12,50 +12,33 @@
     * { box-sizing: border-box; }
     body { margin: 0; font-family: 'Segoe UI', Arial, sans-serif; background: #e5e7eb; }
 
-    @keyframes pulseRing {
-      0%   { box-shadow: 0 0 0 0 rgba(59,130,246,0.55); }
-      60%  { box-shadow: 0 0 0 9px rgba(59,130,246,0); }
-      100% { box-shadow: 0 0 0 0 rgba(59,130,246,0); }
-    }
     @keyframes borderPulse {
       0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
+      50% { opacity: 0.35; }
     }
-    @keyframes cardFadeIn {
-      from { opacity: 0; transform: translateY(-6px) scale(0.97); }
-      to   { opacity: 1; transform: translateY(0) scale(1); }
+    @keyframes cardSlideDown {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
     @keyframes badgePulse {
       0%, 100% { opacity: 1; transform: scale(1); }
       50% { opacity: 0.7; transform: scale(0.95); }
     }
-    @keyframes shimmer {
-      0% { background-position: -200% 0; }
-      100% { background-position: 200% 0; }
-    }
     @keyframes checkAppear {
       from { opacity: 0; transform: scale(0.5); }
       to   { opacity: 1; transform: scale(1); }
     }
+    @keyframes panelExpand {
+      from { opacity: 0; transform: translateX(12px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
 
-    .pulse-dot {
-      animation: pulseRing 2s ease-in-out infinite;
-    }
-    .pulse-border {
-      animation: borderPulse 2s ease-in-out infinite;
-    }
-    .ai-badge {
-      animation: badgePulse 2s ease-in-out infinite;
-    }
-    .card-enter {
-      animation: cardFadeIn 0.18s ease-out forwards;
-    }
-    .check-appear {
-      animation: checkAppear 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-    }
-    .epic-row { font-size: 11px; }
+    .pulse-border { animation: borderPulse 2s ease-in-out infinite; }
+    .ai-badge     { animation: badgePulse 2s ease-in-out infinite; }
+    .card-slide   { animation: cardSlideDown 0.2s ease-out forwards; }
+    .check-appear { animation: checkAppear 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+    .panel-expand { animation: panelExpand 0.25s ease-out forwards; }
 
-    /* Scrollbar styling */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #f1f5f9; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
@@ -64,166 +47,127 @@
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const { useState, useRef, useEffect, useCallback } = React;
+const { useState, useRef, useCallback } = React;
 
-// ─── Data ───────────────────────────────────────────────────────────────────
 const RESULTS = [
-  { id: 1, type: 'Lab',     name: 'CBC with Differential',        date: '03/28/2026', status: 'Final',       provider: 'Est Oshphys, MD',     flag: null,       isDexa: false },
-  { id: 2, type: 'Imaging', name: 'DEXA Scan — Bone Density',     date: '03/24/2026', status: 'Final',       provider: 'Osh Radiology [OSH]', flag: 'ABNORMAL', isDexa: true  },
-  { id: 3, type: 'Lab',     name: 'CMP — Comprehensive Metabolic',date: '03/20/2026', status: 'Final',       provider: 'Est Oshphys, MD',     flag: null,       isDexa: false },
-  { id: 4, type: 'Imaging', name: 'Chest X-Ray PA/Lateral',       date: '03/15/2026', status: 'Final',       provider: 'Osh Radiology [OSH]', flag: null,       isDexa: false },
-  { id: 5, type: 'Imaging', name: 'MRI Brain w/wo Contrast',      date: '03/10/2026', status: 'Preliminary', provider: 'Osh Neuro [OSH]',    flag: null,       isDexa: false },
-  { id: 6, type: 'Lab',     name: 'Lipid Panel',                  date: '03/08/2026', status: 'Final',       provider: 'Est Oshphys, MD',     flag: null,       isDexa: false },
+  { id: 1, type: 'Lab',     name: 'CBC with Differential',         date: '03/28/2026', status: 'Final',       provider: 'Est Oshphys, MD',     flag: null,       isDexa: false },
+  { id: 2, type: 'Imaging', name: 'DEXA Scan — Bone Density',      date: '03/24/2026', status: 'Final',       provider: 'Osh Radiology [OSH]', flag: 'ABNORMAL', isDexa: true  },
+  { id: 3, type: 'Lab',     name: 'CMP — Comprehensive Metabolic', date: '03/20/2026', status: 'Final',       provider: 'Est Oshphys, MD',     flag: null,       isDexa: false },
+  { id: 4, type: 'Imaging', name: 'Chest X-Ray PA/Lateral',        date: '03/15/2026', status: 'Final',       provider: 'Osh Radiology [OSH]', flag: null,       isDexa: false },
+  { id: 5, type: 'Imaging', name: 'MRI Brain w/wo Contrast',       date: '03/10/2026', status: 'Preliminary', provider: 'Osh Neuro [OSH]',     flag: null,       isDexa: false },
+  { id: 6, type: 'Lab',     name: 'Lipid Panel',                   date: '03/08/2026', status: 'Final',       provider: 'Est Oshphys, MD',     flag: null,       isDexa: false },
 ];
 
-// ─── Clinical Context Card ───────────────────────────────────────────────────
-function ClinicalCard({ posY, onClose, onAction, onTScoreHover, onTScoreLeave, actionDone, onMouseEnter, onMouseLeave }) {
-  // Clamp position so card stays within viewport
-  const [top, setTop] = useState(posY);
-  useEffect(() => {
-    const cardH = 420;
-    const viewH = window.innerHeight;
-    const clamped = Math.min(posY, viewH - cardH - 16);
-    setTop(Math.max(clamped, 8));
-  }, [posY]);
-
+// ─── Inline AI Card (appears below DEXA row) ─────────────────────────────────
+function InlineClinicalCard({ onClose, onAction, onTScoreHover, onTScoreLeave, actionDone }) {
   return (
-    <div
-      className="card-enter"
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      style={{
-        position: 'fixed',
-        top: top,
-        right: 16,
-        width: 312,
-        zIndex: 9999,
-        borderRadius: 14,
-        boxShadow: '0 20px 60px rgba(0,0,0,0.22), 0 4px 16px rgba(59,130,246,0.15)',
-        overflow: 'hidden',
-        border: '1px solid #dbeafe',
-        background: '#fff',
-      }}
-    >
-      {/* ── Header ─────────────────── */}
-      <div style={{ background: 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)', padding: '12px 14px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {/* Icon */}
-            <div style={{ width: 34, height: 34, background: 'rgba(255,255,255,0.2)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg width="18" height="18" fill="none" stroke="white" viewBox="0 0 24 24" strokeWidth="1.8">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.347.347a3.5 3.5 0 01-4.95 0l-.347-.347z" />
-              </svg>
-            </div>
-            <div>
-              <div style={{ color: 'white', fontSize: 12, fontWeight: 700, letterSpacing: '0.01em' }}>AI Clinical Insights</div>
-              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, marginTop: 1 }}>Intelligent Intake Hub · Live</div>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            style={{ color: 'rgba(255,255,255,0.6)', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 6, width: 24, height: 24, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, lineHeight: 1 }}
-          >✕</button>
-        </div>
-      </div>
+    <div className="card-slide" style={{ borderLeft: '3px solid #2563eb', borderBottom: '1px solid #bfdbfe', background: 'linear-gradient(to bottom, #eff6ff 0%, #ffffff 60%)' }}>
 
-      {/* ── Alert Banner ───────────── */}
-      <div style={{ background: '#fef2f2', borderBottom: '1px solid #fee2e2', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: 18, flexShrink: 0 }}>🚩</span>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#b91c1c' }}>Abnormal Result Detected</div>
-          <div style={{ fontSize: 10, color: '#dc2626', marginTop: 1 }}>Bone Health Care Gap identified — Action Required</div>
-        </div>
-        <div style={{ background: '#fee2e2', color: '#b91c1c', fontSize: 9, fontWeight: 800, padding: '2px 7px', borderRadius: 20, letterSpacing: '0.06em', textTransform: 'uppercase', flexShrink: 0 }}>URGENT</div>
-      </div>
-
-      {/* ── Summary ────────────────── */}
-      <div style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9' }}>
-        <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Clinical Summary</div>
-        <p style={{ fontSize: 11.5, color: '#1e293b', lineHeight: 1.55, margin: 0 }}>
-          DEXA Scan confirms <strong>Osteoporosis (T&#8209;Score &minus;2.6)</strong>. Significant decline from 2024 baseline (&minus;2.1), representing a clinically meaningful 0.5-point deterioration.
-        </p>
-      </div>
-
-      {/* ── T-Score Detail ─────────── */}
-      <div style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9' }}>
-        <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Bone Density Findings</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-
-          {/* Current T-Score (hoverable) */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc', borderRadius: 8, padding: '6px 10px' }}>
-            <div>
-              <div style={{ fontSize: 10, color: '#64748b' }}>Lumbar Spine (L1–L4) · 2026</div>
-            </div>
-            <span
-              onMouseEnter={onTScoreHover}
-              onMouseLeave={onTScoreLeave}
-              style={{ fontSize: 13, fontWeight: 800, color: '#dc2626', cursor: 'pointer', background: '#fef2f2', padding: '2px 8px', borderRadius: 6, textDecoration: 'underline', textDecorationStyle: 'dotted', textDecorationColor: '#fca5a5', transition: 'all 0.15s' }}
-              title="Hover to verify against report"
-            >
-              T&#8209;Score: &minus;2.6
-            </span>
-          </div>
-
-          {/* Baseline */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc', borderRadius: 8, padding: '6px 10px' }}>
-            <div>
-              <div style={{ fontSize: 10, color: '#64748b' }}>Lumbar Spine · 2024 Baseline</div>
-            </div>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#ea580c' }}>T&#8209;Score: &minus;2.1</span>
-          </div>
-
-          {/* Change indicator */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 10px' }}>
-            <svg width="12" height="12" fill="#ef4444" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V5z" clipRule="evenodd"/>
+      {/* Header */}
+      <div style={{ padding: '10px 16px', borderBottom: '1px solid #dbeafe', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(37,99,235,0.04)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ width: 30, height: 30, background: '#2563eb', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <svg width="15" height="15" fill="none" stroke="white" viewBox="0 0 24 24" strokeWidth="1.8">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.347.347a3.5 3.5 0 01-4.95 0l-.347-.347z" />
             </svg>
-            <span style={{ fontSize: 10, color: '#ef4444', fontWeight: 600 }}>↓ Declined 0.5 points in 18 months</span>
+          </div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#1e40af' }}>AI Clinical Insights</div>
+            <div style={{ fontSize: 10, color: '#64748b' }}>Intelligent Intake Hub · DEXA Scan — Bone Density · 03/24/2026</div>
+          </div>
+          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, padding: '3px 10px', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ fontSize: 13 }}>🚩</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#b91c1c' }}>Abnormal Result — Action Required</span>
+            <span style={{ background: '#fee2e2', color: '#b91c1c', fontSize: 8, fontWeight: 800, padding: '1px 6px', borderRadius: 20, letterSpacing: '0.06em', textTransform: 'uppercase' }}>URGENT</span>
           </div>
         </div>
+        <button
+          onClick={onClose}
+          style={{ color: '#94a3b8', background: '#f1f5f9', border: 'none', borderRadius: 6, width: 24, height: 24, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}
+        >✕</button>
       </div>
 
-      {/* ── Recommended Actions ────── */}
-      <div style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9' }}>
-        <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 7 }}>Recommended Actions</div>
-        {[
-          'Initiate bisphosphonate therapy (Alendronate)',
-          'Order Vitamin D & Calcium serum levels',
-          'Schedule fall-risk assessment (STEADI)',
-        ].map((action, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 5 }}>
-            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#3b82f6', marginTop: 4, flexShrink: 0 }}></div>
-            <span style={{ fontSize: 11, color: '#374151', lineHeight: 1.4 }}>{action}</span>
-          </div>
-        ))}
-      </div>
+      {/* 2-column body */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, padding: '14px 16px' }}>
 
-      {/* ── Action Button ─────────── */}
-      <div style={{ padding: '12px 14px', background: '#f8fafc' }}>
-        {actionDone ? (
-          <div className="check-appear" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#16a34a', fontSize: 12, fontWeight: 700, padding: '8px 0' }}>
-            <div style={{ width: 22, height: 22, background: '#dcfce7', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="12" height="12" fill="#16a34a" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
-              </svg>
+        {/* ── Left: Summary + T-Scores ── */}
+        <div>
+          <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Clinical Summary</div>
+          <p style={{ fontSize: 11.5, color: '#1e293b', lineHeight: 1.6, margin: '0 0 14px' }}>
+            DEXA Scan confirms <strong>Osteoporosis (T&#8209;Score &minus;2.6)</strong>. Significant decline from 2024 baseline (&minus;2.1), representing a clinically meaningful 0.5&#8209;point deterioration in 18 months.
+          </p>
+
+          <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Bone Density Findings</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+
+            {/* Hoverable T-Score */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc', borderRadius: 8, padding: '6px 10px' }}>
+              <span style={{ fontSize: 10.5, color: '#64748b' }}>Lumbar Spine (L1–L4) · 2026</span>
+              <span
+                onMouseEnter={onTScoreHover}
+                onMouseLeave={onTScoreLeave}
+                style={{ fontSize: 13, fontWeight: 800, color: '#dc2626', cursor: 'pointer', background: '#fef2f2', padding: '2px 8px', borderRadius: 6, textDecoration: 'underline', textDecorationStyle: 'dotted', textDecorationColor: '#fca5a5' }}
+                title="Hover to verify in report →"
+              >T&#8209;Score: &minus;2.6</span>
             </div>
-            Order Resolved & Flowsheet Updated
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc', borderRadius: 8, padding: '6px 10px' }}>
+              <span style={{ fontSize: 10.5, color: '#64748b' }}>Lumbar Spine · 2024 Baseline</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#ea580c' }}>T&#8209;Score: &minus;2.1</span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 10px' }}>
+              <svg width="11" height="11" fill="#ef4444" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V5z" clipRule="evenodd"/>
+              </svg>
+              <span style={{ fontSize: 10, color: '#ef4444', fontWeight: 600 }}>↓ Declined 0.5 points in 18 months</span>
+            </div>
           </div>
-        ) : (
-          <button
-            onClick={onAction}
-            style={{ width: '100%', background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: 'white', border: 'none', borderRadius: 9, padding: '10px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 2px 8px rgba(37,99,235,0.35)', transition: 'transform 0.1s, box-shadow 0.1s' }}
-            onMouseOver={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(37,99,235,0.45)'; }}
-            onMouseOut={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(37,99,235,0.35)'; }}
-          >
-            <svg width="13" height="13" fill="none" stroke="white" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-            Resolve Order &amp; Update Flowsheet
-          </button>
-        )}
-        <div style={{ textAlign: 'center', marginTop: 7, fontSize: 9, color: '#94a3b8' }}>
-          Intelligent Intake Hub · HIPAA Compliant · For demo purposes only
+        </div>
+
+        {/* ── Right: Actions + Button ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Recommended Actions</div>
+            {[
+              'Initiate bisphosphonate therapy (Alendronate)',
+              'Order Vitamin D & Calcium serum levels',
+              'Schedule fall-risk assessment (STEADI)',
+            ].map((action, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 7 }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#3b82f6', marginTop: 4, flexShrink: 0 }}></div>
+                <span style={{ fontSize: 11, color: '#374151', lineHeight: 1.45 }}>{action}</span>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            {actionDone ? (
+              <div className="check-appear" style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#16a34a', fontSize: 12, fontWeight: 700, padding: '10px 0' }}>
+                <div style={{ width: 22, height: 22, background: '#dcfce7', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <svg width="12" height="12" fill="#16a34a" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/>
+                  </svg>
+                </div>
+                Order Resolved &amp; Flowsheet Updated
+              </div>
+            ) : (
+              <button
+                onClick={onAction}
+                style={{ width: '100%', background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: 'white', border: 'none', borderRadius: 9, padding: '10px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 2px 8px rgba(37,99,235,0.3)' }}
+                onMouseOver={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(37,99,235,0.4)'; }}
+                onMouseOut={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 2px 8px rgba(37,99,235,0.3)'; }}
+              >
+                <svg width="13" height="13" fill="none" stroke="white" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                Resolve Order &amp; Update Flowsheet
+              </button>
+            )}
+            <div style={{ textAlign: 'center', marginTop: 6, fontSize: 9, color: '#94a3b8' }}>
+              Intelligent Intake Hub · HIPAA Compliant · Demo only
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -232,55 +176,34 @@ function ClinicalCard({ posY, onClose, onAction, onTScoreHover, onTScoreLeave, a
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 function App() {
-  const [hoveredRowId, setHoveredRowId]     = useState(null);
-  const [cardVisible, setCardVisible]       = useState(false);
-  const [cardY, setCardY]                   = useState(100);
+  const [hoveredRowId, setHoveredRowId]       = useState(null);
+  const [selectedRowId, setSelectedRowId]     = useState(null);
+  const [cardVisible, setCardVisible]         = useState(false);
   const [tscoreHighlight, setTscoreHighlight] = useState(false);
-  const [actionDone, setActionDone]         = useState(false);
-  const [activeTab, setActiveTab]           = useState('Results');
+  const [actionDone, setActionDone]           = useState(false);
+  const [activeTab, setActiveTab]             = useState('Results');
 
-  const leaveTimer  = useRef(null);
-  const dexaRowRef  = useRef(null);
+  const dexaExpanded = selectedRowId === 2 && cardVisible;
 
-  const clearLeave = () => clearTimeout(leaveTimer.current);
-
-  const handleDexaEnter = useCallback(() => {
-    clearLeave();
-    if (dexaRowRef.current) {
-      const rect = dexaRowRef.current.getBoundingClientRect();
-      setCardY(rect.top);
+  const handleRowClick = useCallback((id, isDexa) => {
+    if (isDexa) {
+      if (selectedRowId === id && cardVisible) {
+        setCardVisible(false);
+        setSelectedRowId(null);
+      } else {
+        setSelectedRowId(id);
+        setCardVisible(true);
+      }
+    } else {
+      setCardVisible(false);
+      setSelectedRowId(id);
     }
-    setHoveredRowId(2);
-    setCardVisible(true);
-  }, []);
-
-  const handleDexaLeave = useCallback(() => {
-    leaveTimer.current = setTimeout(() => {
-      setHoveredRowId(null);
-      setCardVisible(false);
-    }, 280);
-  }, []);
-
-  const handleCardEnter  = () => clearLeave();
-  const handleCardLeave  = () => {
-    leaveTimer.current = setTimeout(() => {
-      setHoveredRowId(null);
-      setCardVisible(false);
-    }, 280);
-  };
-
-  const handleRowEnter = (id) => {
-    clearLeave();
-    setHoveredRowId(id);
-  };
-  const handleRowLeave = () => {
-    leaveTimer.current = setTimeout(() => setHoveredRowId(null), 150);
-  };
+  }, [selectedRowId, cardVisible]);
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-      {/* ─── Epic Top Bar ─────────────────────────────── */}
+      {/* ─── Epic Top Bar ── */}
       <div style={{ background: '#7f1d1d', color: 'white', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 12, fontSize: 11, userSelect: 'none', flexShrink: 0 }}>
         <div style={{ fontWeight: 900, fontSize: 16, letterSpacing: '-0.5px', marginRight: 4 }}>Epic</div>
         <span style={{ opacity: 0.8 }}>Hyperspace — OSH TN FRAYSER</span>
@@ -295,87 +218,57 @@ function App() {
         </div>
       </div>
 
-      {/* ─── Secondary Nav ────────────────────────────── */}
+      {/* ─── Secondary Nav ── */}
       <div style={{ background: '#991b1b', color: 'white', padding: '3px 10px', display: 'flex', alignItems: 'center', gap: 16, fontSize: 10, userSelect: 'none', flexShrink: 0 }}>
         {['Medical Records','Patient Scans','Patient Lookup','Remind Me','My Tools','GWY Archive','Parachute DME Dashboard'].map(item => (
           <span key={item} style={{ opacity: 0.8, cursor: 'pointer' }}>{item} ▾</span>
         ))}
       </div>
 
-      {/* ─── Main Body ────────────────────────────────── */}
+      {/* ─── Main Body ── */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
-        {/* ── Left Sidebar ──────────────────────────── */}
+        {/* ── Left Sidebar ── */}
         <div style={{ width: 170, background: 'white', borderRight: '1px solid #e2e8f0', flexShrink: 0, overflowY: 'auto', fontSize: 11 }}>
-          <div style={{ background: '#f1f5f9', borderBottom: '1px solid #e2e8f0', padding: '6px 10px', fontWeight: 700, fontSize: 12, color: '#374151' }}>
-            In Basket
-          </div>
-
-          {/* Nav items */}
+          <div style={{ background: '#f1f5f9', borderBottom: '1px solid #e2e8f0', padding: '6px 10px', fontWeight: 700, fontSize: 12, color: '#374151' }}>In Basket</div>
           {[
-            { label: 'Results',                  count: '11/72',   highlight: true  },
-            { label: 'Rx Request',               count: '0/4',     highlight: false },
-            { label: 'My Open Charts',           count: '231/247', highlight: false },
-            { label: 'My Open Encounters',       count: '124/134', highlight: false },
-            { label: 'Cosign - Chart',           count: '2/2',     highlight: false },
-            { label: 'Cosign - Clinic Orders',   count: '2/2',     highlight: false },
-            { label: 'Overdue Results',          count: '3/3',     highlight: false },
-            { label: 'Canceled Ord',             count: '2/4',     highlight: false },
-            { label: 'My Incomplete Notes',      count: '1/2',     highlight: false },
-            { label: 'CRM',                      count: '0/2',     highlight: false },
-            { label: 'Letter Queue',             count: '10/12',   highlight: false },
-            { label: 'Media Manager',            count: '4/7',     highlight: false },
-            { label: 'My Unsigned Orders',       count: '18/25',   highlight: false },
-            { label: 'Patient Clinical Update',  count: '3/3',     highlight: false },
-            { label: 'Pending Orders',           count: '1/3',     highlight: false },
-            { label: 'Referral Message',         count: '5/7',     highlight: false },
-            { label: 'Transitions of Care',      count: '1/2',     highlight: false },
+            { label: 'Results',                 count: '11/72',   active: true  },
+            { label: 'Rx Request',              count: '0/4',     active: false },
+            { label: 'My Open Charts',          count: '231/247', active: false },
+            { label: 'My Open Encounters',      count: '124/134', active: false },
+            { label: 'Cosign - Chart',          count: '2/2',     active: false },
+            { label: 'Cosign - Clinic Orders',  count: '2/2',     active: false },
+            { label: 'Overdue Results',         count: '3/3',     active: false },
+            { label: 'Canceled Ord',            count: '2/4',     active: false },
+            { label: 'My Incomplete Notes',     count: '1/2',     active: false },
+            { label: 'CRM',                     count: '0/2',     active: false },
+            { label: 'Letter Queue',            count: '10/12',   active: false },
+            { label: 'Media Manager',           count: '4/7',     active: false },
+            { label: 'My Unsigned Orders',      count: '18/25',   active: false },
+            { label: 'Patient Clinical Update', count: '3/3',     active: false },
+            { label: 'Pending Orders',          count: '1/3',     active: false },
+            { label: 'Referral Message',        count: '5/7',     active: false },
+            { label: 'Transitions of Care',     count: '1/2',     active: false },
           ].map(item => (
-            <div
-              key={item.label}
-              style={{
-                padding: '5px 10px',
-                borderBottom: '1px solid #f1f5f9',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                cursor: 'pointer',
-                background: item.highlight ? '#eff6ff' : 'transparent',
-                fontWeight: item.highlight ? 600 : 400,
-                color: item.highlight ? '#1d4ed8' : '#4b5563',
-              }}
-            >
+            <div key={item.label} style={{ padding: '5px 10px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', background: item.active ? '#eff6ff' : 'transparent', fontWeight: item.active ? 600 : 400, color: item.active ? '#1d4ed8' : '#4b5563' }}>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11 }}>{item.label}</span>
               <span style={{ fontSize: 10, color: '#9ca3af', flexShrink: 0, marginLeft: 4 }}>{item.count}</span>
             </div>
           ))}
-
-          {/* Attached, Follow-up, Search at bottom */}
           <div style={{ borderTop: '1px solid #e2e8f0', marginTop: 4 }}>
-            {['Attached & Covering Users (0/0)', 'Follow-up', 'Search', 'Sent Messages', 'Completed Work'].map(item => (
+            {['Attached & Covering (0/0)', 'Follow-up', 'Search', 'Sent Messages', 'Completed Work'].map(item => (
               <div key={item} style={{ padding: '5px 10px', fontSize: 11, color: '#6b7280', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>{item}</div>
             ))}
           </div>
         </div>
 
-        {/* ── Center — Results Panel ───────────────── */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'white' }}>
+        {/* ── Center — Results Panel ── */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'white', minWidth: 0 }}>
 
           {/* Tab bar */}
           <div style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             {['Results','Media Manager','Orders','Notes','Chart'].map(tab => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                style={{
-                  fontSize: 11, padding: '4px 12px', border: activeTab === tab ? '1px solid #cbd5e1' : '1px solid transparent',
-                  borderRadius: 6, cursor: 'pointer', fontWeight: activeTab === tab ? 600 : 400,
-                  color: activeTab === tab ? '#1d4ed8' : '#6b7280',
-                  background: activeTab === tab ? 'white' : 'transparent',
-                  boxShadow: activeTab === tab ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-                  transition: 'all 0.1s',
-                }}
-              >{tab}</button>
+              <button key={tab} onClick={() => setActiveTab(tab)} style={{ fontSize: 11, padding: '4px 12px', border: activeTab === tab ? '1px solid #cbd5e1' : '1px solid transparent', borderRadius: 6, cursor: 'pointer', fontWeight: activeTab === tab ? 600 : 400, color: activeTab === tab ? '#1d4ed8' : '#6b7280', background: activeTab === tab ? 'white' : 'transparent', boxShadow: activeTab === tab ? '0 1px 3px rgba(0,0,0,0.08)' : 'none' }}>{tab}</button>
             ))}
             <div style={{ marginLeft: 'auto', fontSize: 10.5, color: '#64748b', display: 'flex', gap: 12 }}>
               <span>Patient: <strong style={{ color: '#1e293b' }}>Test, Roxie</strong></span>
@@ -386,94 +279,74 @@ function App() {
 
           {/* Column headers */}
           <div style={{ background: '#f1f5f9', borderBottom: '1px solid #e2e8f0', display: 'grid', gridTemplateColumns: '70px 1fr 90px 80px 1fr 60px', padding: '5px 14px', gap: 8, fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0 }}>
-            <div>Type</div>
-            <div>Result Name</div>
-            <div>Date</div>
-            <div>Status</div>
-            <div>Provider</div>
-            <div>Flag</div>
+            <div>Type</div><div>Result Name</div><div>Date</div><div>Status</div><div>Provider</div><div>Flag</div>
           </div>
 
           {/* Result rows */}
           <div style={{ flex: 1, overflowY: 'auto' }}>
             {RESULTS.map(result => {
-              const isHovered = hoveredRowId === result.id;
+              const isHovered  = hoveredRowId === result.id;
+              const isSelected = selectedRowId === result.id;
               return (
-                <div
-                  key={result.id}
-                  ref={result.isDexa ? dexaRowRef : null}
-                  onMouseEnter={result.isDexa ? handleDexaEnter : () => handleRowEnter(result.id)}
-                  onMouseLeave={result.isDexa ? handleDexaLeave : handleRowLeave}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '70px 1fr 90px 80px 1fr 60px',
-                    padding: '8px 14px',
-                    gap: 8,
-                    borderBottom: '1px solid #f1f5f9',
-                    cursor: 'pointer',
-                    background: result.isDexa
-                      ? (isHovered ? '#eff6ff' : 'rgba(254,249,235,0.5)')
-                      : (isHovered ? '#f8fafc' : 'transparent'),
-                    transition: 'background 0.15s',
-                    position: 'relative',
-                    alignItems: 'center',
-                  }}
-                >
-                  {/* Pulse left accent for DEXA */}
-                  {result.isDexa && (
-                    <div
-                      className={isHovered ? '' : 'pulse-border'}
-                      style={{
-                        position: 'absolute', left: 0, top: 0, bottom: 0, width: 3,
-                        background: '#3b82f6', borderRadius: '0 2px 2px 0',
-                        opacity: isHovered ? 1 : 0.6,
-                      }}
+                <React.Fragment key={result.id}>
+                  <div
+                    onClick={() => handleRowClick(result.id, result.isDexa)}
+                    onMouseEnter={() => setHoveredRowId(result.id)}
+                    onMouseLeave={() => setHoveredRowId(null)}
+                    style={{
+                      display: 'grid', gridTemplateColumns: '70px 1fr 90px 80px 1fr 60px',
+                      padding: '8px 14px', gap: 8, borderBottom: '1px solid #f1f5f9',
+                      cursor: 'pointer', alignItems: 'center', position: 'relative',
+                      background: result.isDexa
+                        ? (isSelected && cardVisible ? '#eff6ff' : isHovered ? '#f0f9ff' : 'rgba(254,249,235,0.4)')
+                        : (isHovered ? '#f8fafc' : 'transparent'),
+                      transition: 'background 0.15s',
+                    }}
+                  >
+                    {/* Blue left accent for DEXA */}
+                    {result.isDexa && (
+                      <div
+                        className={isSelected && cardVisible ? '' : 'pulse-border'}
+                        style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: '#3b82f6', borderRadius: '0 2px 2px 0', opacity: isSelected && cardVisible ? 1 : 0.55 }}
+                      />
+                    )}
+
+                    {/* Type */}
+                    <div>
+                      <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: result.type === 'Lab' ? '#f3e8ff' : '#dbeafe', color: result.type === 'Lab' ? '#7e22ce' : '#1d4ed8' }}>{result.type}</span>
+                    </div>
+
+                    {/* Name */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 11.5, fontWeight: result.isDexa ? 600 : 400, color: result.isDexa ? '#1e293b' : '#374151' }}>{result.name}</span>
+                      {result.isDexa && <span className="ai-badge" style={{ fontSize: 9, fontWeight: 800, background: '#2563eb', color: 'white', padding: '1px 6px', borderRadius: 10 }}>AI</span>}
+                      {result.isDexa && actionDone && <span style={{ fontSize: 9, fontWeight: 700, background: '#dcfce7', color: '#15803d', padding: '1px 6px', borderRadius: 10 }}>✓ Resolved</span>}
+                    </div>
+
+                    {/* Date */}
+                    <div style={{ fontSize: 11, color: '#64748b' }}>{result.date}</div>
+
+                    {/* Status */}
+                    <div style={{ fontSize: 11, color: result.status === 'Preliminary' ? '#d97706' : '#64748b', fontWeight: result.status === 'Preliminary' ? 600 : 400 }}>{result.status}</div>
+
+                    {/* Provider */}
+                    <div style={{ fontSize: 11, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{result.provider}</div>
+
+                    {/* Flag */}
+                    <div>{result.flag && <span style={{ fontSize: 9, fontWeight: 700, background: '#fee2e2', color: '#b91c1c', padding: '2px 6px', borderRadius: 4 }}>ABN</span>}</div>
+                  </div>
+
+                  {/* ── Inline AI Card drops below DEXA row ── */}
+                  {result.isDexa && cardVisible && (
+                    <InlineClinicalCard
+                      onClose={() => { setCardVisible(false); setSelectedRowId(null); }}
+                      onAction={() => setActionDone(true)}
+                      onTScoreHover={() => setTscoreHighlight(true)}
+                      onTScoreLeave={() => setTscoreHighlight(false)}
+                      actionDone={actionDone}
                     />
                   )}
-
-                  {/* Type badge */}
-                  <div>
-                    <span style={{
-                      fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
-                      background: result.type === 'Lab' ? '#f3e8ff' : '#dbeafe',
-                      color: result.type === 'Lab' ? '#7e22ce' : '#1d4ed8',
-                    }}>{result.type}</span>
-                  </div>
-
-                  {/* Name */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 11.5, fontWeight: result.isDexa ? 600 : 400, color: result.isDexa ? '#1e293b' : '#374151' }}>
-                      {result.name}
-                    </span>
-                    {result.isDexa && (
-                      <span
-                        className="ai-badge"
-                        style={{ fontSize: 9, fontWeight: 800, background: '#2563eb', color: 'white', padding: '1px 6px', borderRadius: 10 }}
-                      >AI</span>
-                    )}
-                    {result.isDexa && actionDone && (
-                      <span style={{ fontSize: 9, fontWeight: 700, background: '#dcfce7', color: '#15803d', padding: '1px 6px', borderRadius: 10 }}>✓ Resolved</span>
-                    )}
-                  </div>
-
-                  {/* Date */}
-                  <div style={{ fontSize: 11, color: '#64748b' }}>{result.date}</div>
-
-                  {/* Status */}
-                  <div style={{ fontSize: 11, color: result.status === 'Preliminary' ? '#d97706' : '#64748b', fontWeight: result.status === 'Preliminary' ? 600 : 400 }}>
-                    {result.status}
-                  </div>
-
-                  {/* Provider */}
-                  <div style={{ fontSize: 11, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{result.provider}</div>
-
-                  {/* Flag */}
-                  <div>
-                    {result.flag && (
-                      <span style={{ fontSize: 9, fontWeight: 700, background: '#fee2e2', color: '#b91c1c', padding: '2px 6px', borderRadius: 4 }}>ABN</span>
-                    )}
-                  </div>
-                </div>
+                </React.Fragment>
               );
             })}
           </div>
@@ -484,83 +357,107 @@ function App() {
             <span style={{ color: '#e2e8f0' }}>·</span>
             <span>1 Abnormal</span>
             <span style={{ color: '#e2e8f0' }}>·</span>
-            <span style={{ color: '#2563eb', fontWeight: 600 }}>✦ 1 AI Insight Available — hover DEXA row</span>
-            {actionDone && (
-              <>
-                <span style={{ color: '#e2e8f0' }}>·</span>
-                <span style={{ color: '#16a34a', fontWeight: 600 }}>✓ DEXA Order Resolved &amp; Flowsheet Updated</span>
-              </>
-            )}
+            <span style={{ color: '#2563eb', fontWeight: 600 }}>✦ 1 AI Insight Available — click DEXA row</span>
+            {actionDone && <><span style={{ color: '#e2e8f0' }}>·</span><span style={{ color: '#16a34a', fontWeight: 600 }}>✓ DEXA Order Resolved &amp; Flowsheet Updated</span></>}
           </div>
         </div>
 
-        {/* ── Right Panel — Verification ───────────── */}
-        <div style={{ width: 240, background: '#fafafa', borderLeft: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-          <div style={{ background: '#f1f5f9', borderBottom: '1px solid #e2e8f0', padding: '6px 12px', fontSize: 11, fontWeight: 700, color: '#475569', flexShrink: 0 }}>
-            Result Detail
+        {/* ── Right Panel — expands when DEXA selected ── */}
+        <div
+          className={dexaExpanded ? 'panel-expand' : ''}
+          style={{
+            width: dexaExpanded ? undefined : 240,
+            flex: dexaExpanded ? 1 : undefined,
+            background: dexaExpanded ? '#fff' : '#fafafa',
+            borderLeft: '1px solid #e2e8f0',
+            display: 'flex',
+            flexDirection: 'column',
+            flexShrink: 0,
+            transition: 'width 0.3s ease, flex 0.3s ease',
+            minWidth: dexaExpanded ? 0 : 240,
+          }}
+        >
+          <div style={{ background: dexaExpanded ? '#eff6ff' : '#f1f5f9', borderBottom: '1px solid #e2e8f0', padding: '6px 12px', fontSize: 11, fontWeight: 700, color: dexaExpanded ? '#1e40af' : '#475569', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+            {dexaExpanded && <span style={{ fontSize: 10 }}>🔍</span>}
+            {dexaExpanded ? 'Source Verification — DEXA Scan Report' : 'Result Detail'}
           </div>
 
-          {hoveredRowId && RESULTS.find(r => r.id === hoveredRowId)?.isDexa ? (
-            <div style={{ padding: '10px 12px', fontSize: 11, overflowY: 'auto', flex: 1 }}>
-              <div style={{ fontWeight: 700, color: '#374151', marginBottom: 6 }}>DEXA Scan — Bone Density</div>
-              <div style={{ color: '#64748b', lineHeight: 1.7, marginBottom: 10, fontSize: 10.5 }}>
-                <div><strong>Date:</strong> 03/24/2026</div>
-                <div><strong>Ordering MD:</strong> Est Oshphys, MD</div>
-                <div><strong>Facility:</strong> Osh Radiology</div>
-                <div><strong>Status:</strong> Final</div>
+          {dexaExpanded ? (
+            <div style={{ padding: '14px 16px', overflowY: 'auto', flex: 1 }}>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                {/* Report metadata */}
+                <div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Report Details</div>
+                  <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.8 }}>
+                    <div><strong style={{ color: '#374151' }}>Date:</strong> 03/24/2026</div>
+                    <div><strong style={{ color: '#374151' }}>Ordering MD:</strong> Est Oshphys, MD</div>
+                    <div><strong style={{ color: '#374151' }}>Facility:</strong> Osh Radiology</div>
+                    <div><strong style={{ color: '#374151' }}>Status:</strong> Final</div>
+                    <div><strong style={{ color: '#374151' }}>Accession:</strong> OSH-2026-03241</div>
+                  </div>
+                </div>
+                {/* Indication */}
+                <div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Clinical Indication</div>
+                  <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.6 }}>
+                    Osteoporosis screening. Follow-up to 2024 baseline study per established care protocol. Patient has history of fragility fracture risk factors.
+                  </div>
+                </div>
               </div>
 
-              <div style={{ fontSize: 10, color: '#64748b', marginBottom: 8 }}>
-                <strong>Indication:</strong> Osteoporosis screening, follow-up to 2024 baseline per established care protocol.
-              </div>
-
-              {/* T-Score verification box — highlights when hovering T-score in card */}
+              {/* T-Score verification — highlights when hovering T-score in card */}
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Bone Density Results — Source Data</div>
               <div
                 style={{
                   border: tscoreHighlight ? '2px solid #3b82f6' : '1px solid #e2e8f0',
-                  borderRadius: 10,
-                  padding: '10px',
+                  borderRadius: 10, padding: '12px 14px',
                   background: tscoreHighlight ? '#eff6ff' : '#f8fafc',
                   transition: 'all 0.25s',
-                  boxShadow: tscoreHighlight ? '0 0 0 4px rgba(59,130,246,0.12)' : 'none',
-                  marginBottom: 10,
+                  boxShadow: tscoreHighlight ? '0 0 0 4px rgba(59,130,246,0.1)' : 'none',
+                  marginBottom: 14,
                 }}
               >
-                <div style={{ fontSize: 9, fontWeight: 700, color: tscoreHighlight ? '#1d4ed8' : '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
-                  {tscoreHighlight ? (
-                    <>
-                      <span>🔍</span>
-                      <span>Verifying T-Score...</span>
-                    </>
-                  ) : 'Bone Density Results'}
+                <div style={{ fontSize: 9, fontWeight: 700, color: tscoreHighlight ? '#1d4ed8' : '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  {tscoreHighlight ? <><span>🔍</span><span>Verifying T-Score from AI Card...</span></> : 'Bone Density Measurements'}
                 </div>
 
-                {[
-                  { site: 'Lumbar Spine (L1–L4)', tscore: '−2.6', color: '#dc2626', highlight: tscoreHighlight },
-                  { site: 'Femoral Neck',          tscore: '−2.2', color: '#ea580c', highlight: false },
-                  { site: 'Total Hip',             tscore: '−1.9', color: '#ea580c', highlight: false },
-                ].map(row => (
-                  <div key={row.site} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <span style={{ fontSize: 10.5, color: '#64748b' }}>{row.site}</span>
-                    <span style={{
-                      fontSize: row.highlight ? 14 : 12,
-                      fontWeight: 800,
-                      color: row.highlight ? '#1d4ed8' : row.color,
-                      background: row.highlight ? '#dbeafe' : 'transparent',
-                      padding: row.highlight ? '1px 6px' : '0',
-                      borderRadius: 5,
-                      transition: 'all 0.2s',
-                    }}>{row.tscore}</span>
-                  </div>
-                ))}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: '6px 16px', alignItems: 'center', fontSize: 10.5 }}>
+                  <div style={{ fontWeight: 600, color: '#64748b', fontSize: 9, textTransform: 'uppercase' }}>Site</div>
+                  <div style={{ fontWeight: 600, color: '#64748b', fontSize: 9, textTransform: 'uppercase' }}>BMD</div>
+                  <div style={{ fontWeight: 600, color: '#64748b', fontSize: 9, textTransform: 'uppercase' }}>T-Score</div>
+                  <div style={{ fontWeight: 600, color: '#64748b', fontSize: 9, textTransform: 'uppercase' }}>Baseline</div>
 
-                <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #e2e8f0' }}>
-                  <div style={{ fontSize: 9.5, color: '#64748b' }}>WHO Criteria: T ≤ −2.5 = <strong style={{ color: '#dc2626' }}>Osteoporosis</strong></div>
+                  {[
+                    { site: 'Lumbar Spine (L1–L4)', bmd: '0.681', tscore: '−2.6', baseline: '−2.1', highlight: tscoreHighlight, severe: true },
+                    { site: 'Femoral Neck',          bmd: '0.742', tscore: '−2.2', baseline: '−1.9', highlight: false, severe: false },
+                    { site: 'Total Hip',             bmd: '0.798', tscore: '−1.9', baseline: '−1.7', highlight: false, severe: false },
+                  ].map(row => (
+                    <React.Fragment key={row.site}>
+                      <div style={{ color: '#374151', fontSize: 11, padding: '4px 0', borderTop: '1px solid #f1f5f9' }}>{row.site}</div>
+                      <div style={{ color: '#64748b', fontSize: 11, borderTop: '1px solid #f1f5f9', padding: '4px 0' }}>{row.bmd} g/cm²</div>
+                      <div style={{
+                        fontSize: row.highlight ? 14 : 12, fontWeight: 800, borderTop: '1px solid #f1f5f9', padding: '4px 0',
+                        color: row.highlight ? '#1d4ed8' : (row.severe ? '#dc2626' : '#ea580c'),
+                        background: row.highlight ? '#dbeafe' : 'transparent',
+                        borderRadius: row.highlight ? 5 : 0,
+                        paddingLeft: row.highlight ? 6 : 0,
+                        transition: 'all 0.2s',
+                      }}>{row.tscore}</div>
+                      <div style={{ color: '#94a3b8', fontSize: 11, borderTop: '1px solid #f1f5f9', padding: '4px 0' }}>{row.baseline}</div>
+                    </React.Fragment>
+                  ))}
+                </div>
+
+                <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid #e2e8f0', fontSize: 9.5, color: '#64748b' }}>
+                  WHO Criteria: T ≤ −2.5 = <strong style={{ color: '#dc2626' }}>Osteoporosis</strong> &nbsp;|&nbsp; −2.5 to −1.0 = <strong style={{ color: '#ea580c' }}>Osteopenia</strong>
                 </div>
               </div>
 
-              <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 10px', fontSize: 10.5, color: '#78350f', lineHeight: 1.5 }}>
-                <strong>Impression:</strong> Findings consistent with osteoporosis at lumbar spine. Recommend clinical correlation and therapeutic intervention.
+              {/* Radiologist Impression */}
+              <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>Radiologist Impression</div>
+              <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 12px', fontSize: 11, color: '#78350f', lineHeight: 1.6 }}>
+                Bone mineral density is significantly reduced at the lumbar spine meeting WHO criteria for osteoporosis. Femoral neck and total hip measurements demonstrate osteopenia. Compared to prior study (2024), there has been a clinically significant decrease in lumbar spine BMD. <strong>Clinical correlation and therapeutic intervention are recommended.</strong>
               </div>
             </div>
           ) : (
@@ -570,35 +467,19 @@ function App() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                 </svg>
               </div>
-              <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.5 }}>Hover a result row to view detail</div>
-              <div style={{ marginTop: 12, fontSize: 10, color: '#cbd5e1' }}>
-                Hover the <strong style={{ color: '#3b82f6' }}>DEXA Scan</strong> row<br/>to activate AI insights
-              </div>
+              <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.6 }}>Click a result row<br/>to view detail</div>
+              <div style={{ marginTop: 10, fontSize: 10, color: '#cbd5e1' }}>Click <strong style={{ color: '#3b82f6' }}>DEXA Scan</strong><br/>to activate AI insights</div>
             </div>
           )}
         </div>
       </div>
 
-      {/* ─── Footer ────────────────────────────────── */}
+      {/* ─── Footer ── */}
       <div style={{ background: '#1e293b', color: '#64748b', fontSize: 10, padding: '5px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
         <span style={{ color: '#94a3b8', fontWeight: 600 }}>Clinical Hover Tool — Intelligent Intake Hub</span>
-        <span>Hover the <span style={{ color: '#60a5fa' }}>DEXA Scan ↑</span> row · Then hover the T-Score to verify · Click the button to resolve</span>
+        <span>Click the <span style={{ color: '#60a5fa' }}>DEXA Scan</span> row · Hover the T-Score in the card to verify against the source report · Click to resolve</span>
         <span>© 2026 · Demo prototype only — not for clinical use</span>
       </div>
-
-      {/* ─── Floating Clinical Card (portal-style) ─ */}
-      {cardVisible && (
-        <ClinicalCard
-          posY={cardY}
-          onClose={() => setCardVisible(false)}
-          onAction={() => setActionDone(true)}
-          onTScoreHover={() => setTscoreHighlight(true)}
-          onTScoreLeave={() => setTscoreHighlight(false)}
-          actionDone={actionDone}
-          onMouseEnter={handleCardEnter}
-          onMouseLeave={handleCardLeave}
-        />
-      )}
     </div>
   );
 }
